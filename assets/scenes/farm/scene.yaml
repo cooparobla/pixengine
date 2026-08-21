@@ -1,0 +1,105 @@
+format: pixengine
+scene:
+  scene_name: farm
+  auto_transform: false          # REQUIRED — pixengine uses Transform2D, not the 3D Transform
+  root_objects:
+
+    - name: Camera
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: 0.0, y: 0.0 }
+        - type: Camera2D
+          zoom: 1.0            # visible world extent = kReferenceWidth/Height (480x270) / (ppu*zoom),
+                                # same FOV the scene's Player/Prop y-positions were originally tuned
+                                # against -- the fit-viewport reintroduced that fixed reference FOV,
+                                # so this reverts the temporary zoom=2.0 compensation from when the
+                                # window's actual size briefly drove the visible extent directly
+          follow_target: Player
+          follow_lerp: 8.0
+          follow_deadzone: { x: 0.0, y: 0.0 }
+          clamp_to_bounds: false
+
+    - name: Farm
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: -15.0, y: 5.0 }   # world position of tile (0,0)'s top-left corner
+        - type: TilemapRenderer
+          tilemap: ../../tilemaps/farm.tilemap.yaml
+
+    # Reuses the same asymmetric test fixture as Player (Phase 5 has no
+    # second art asset) — stands in for a tall, occluding obstacle purely to
+    # exercise y_sort: an object at world_y=0 that the player walks in front
+    # of and behind as its own Transform2D.position.y changes over time.
+    - name: Tree
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: 0.0, y: 0.0 }
+        - type: SpriteRenderer
+          sprite: ../../sprites/player.pix
+          sort_layer: 0
+          y_sort: true
+          cull_size: { x: 1.0, y: 1.0 }
+
+    # A small cluster streamed by Phase 7's SpriteResidencySystem: each starts
+    # with an empty handle (see register.h) and is only acquired once Player's
+    # bouncing path brings it within the camera's visible rect + residency
+    # margin, then released again after it falls out of range for long enough.
+    - name: Prop1
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: -1.0, y: 10.0 }
+        - type: SpriteRenderer
+          sprite: ../../sprites/player.pix
+          sort_layer: 0
+          y_sort: true
+          cull_size: { x: 1.0, y: 1.0 }
+    - name: Prop2
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: 0.0, y: 11.0 }
+        - type: SpriteRenderer
+          sprite: ../../sprites/player.pix
+          sort_layer: 0
+          y_sort: true
+          cull_size: { x: 1.0, y: 1.0 }
+    - name: Prop3
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: 1.0, y: 12.0 }
+        - type: SpriteRenderer
+          sprite: ../../sprites/player.pix
+          sort_layer: 0
+          y_sort: true
+          cull_size: { x: 1.0, y: 1.0 }
+    - name: Prop4
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: 2.0, y: 13.0 }
+        - type: SpriteRenderer
+          sprite: ../../sprites/player.pix
+          sort_layer: 0
+          y_sort: true
+          cull_size: { x: 1.0, y: 1.0 }
+
+    - name: Player
+      active: true
+      components:
+        - type: Transform2D
+          position: { x: 0.0, y: -3.0 }
+        - type: SpriteRenderer
+          sprite: ../../sprites/player.pix
+          color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }
+          sort_layer: 0
+          y_sort: true
+          cull_size: { x: 1.0, y: 1.0 }
+        - type: SpriteAnimator
+          default_animation: idle
+          speed: 1.0
+          autoplay: true

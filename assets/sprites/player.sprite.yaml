@@ -1,0 +1,10 @@
+format: pixengine_sprite
+version: "1.0"
+
+pixels_per_unit: 16
+pivot: { x: 0.5, y: 0.0 } # bottom-center
+
+animations:
+  idle:
+    loop: Hold
+    speed: 1.0

@@ -1,0 +1,28 @@
+format: uicoopa
+scene:
+  scene_name: hud
+  auto_transform: false          # uicoopa scenes use RectTransform, not the 3D Transform
+  root_objects:
+    - name: Canvas
+      active: true
+      components:
+        - type: Canvas
+          reference_resolution: { x: 1280.0, y: 720.0 }
+          match_width_or_height: 0.5
+      children:
+        - name: TitleLabel
+          active: true
+          components:
+            - type: RectTransform
+              anchor_preset: TopLeft
+              anchored_position: { x: 12.0, y: -12.0 }
+              size_delta: { x: 300.0, y: 32.0 }
+            - type: Text
+              font: ../../fonts/DejaVuSans.ttf
+              text: "pixengine"
+              color: { r: 1.0, g: 1.0, b: 1.0, a: 1.0 }
+              font_size: 18
+              horizontal_align: Left
+              vertical_align: Top
+              overflow: Overflow
+              raycast_target: false

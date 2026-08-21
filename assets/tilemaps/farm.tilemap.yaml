@@ -1,0 +1,32 @@
+format: pixengine_tilemap
+version: "1.0"
+
+tile_size: { x: 16, y: 16 }   # source pixels per tile
+pixels_per_unit: 16            # -> 1 tile == 1 world unit
+
+tileset:
+  source: ../tilesets/farm_tiles.pix
+  columns: 4                   # tiles per row in the tileset image
+  first_gid: 1                 # gid 0 is always "empty"
+
+layers:
+  - name: ground
+    sort_layer: -100
+    y_sort: false
+    width: 30
+    height: 20
+    encoding: rle
+    data: ["600:1"]             # all grass (gid 1)
+
+  - name: buildings
+    sort_layer: 0
+    y_sort: true                # tall tiles that occlude / are occluded by the player
+    y_sort_offset: 0.0
+    width: 30
+    height: 20
+    encoding: rle
+    data: ["224:0", "3:5", "27:0", "3:5", "27:0", "3:5", "313:0"]  # a 3x3 wall cluster (gid 5)
+
+collision:                       # inert data -- parsed and exposed, no system consumes it (out of scope)
+  - layer: buildings
+    solid_gids: [5]
