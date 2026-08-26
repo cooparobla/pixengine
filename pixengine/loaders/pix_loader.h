@@ -12,7 +12,6 @@
 #ifndef PIXENGINE_LOADERS_PIX_LOADER_H
 #define PIXENGINE_LOADERS_PIX_LOADER_H
 
-#include <volk/volk.h>
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
@@ -27,6 +26,8 @@
 #include <gfxcoopa/memory/allocator.h>
 #include <gfxcoopa/command/command_pool.h>
 #include <gfxcoopa/engine/data/texture.h>
+#include <gfxcoopa/types/format.h>
+#include <gfxcoopa/types/sampler_desc.h>
 
 #include <pixengine/pix/color.h>
 #include <pixengine/pix/pix_document.h>
@@ -138,7 +139,7 @@ public:
             device_, allocator_, cmd_pool_,
             reinterpret_cast<const uint8_t*>(decoded->pixels.data()),
             static_cast<uint32_t>(decoded->atlas_w), static_cast<uint32_t>(decoded->atlas_h),
-            /*srgb=*/false, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
+            coopa::gfx::Format::RGBA8_Unorm, coopa::gfx::SamplerDesc::pixel_art());
         return std::make_shared<SpriteAsset>(std::move(atlas), std::move(*decoded));
     }
 

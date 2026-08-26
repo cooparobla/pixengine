@@ -119,7 +119,7 @@ public:
      *                               already be configured by the caller (see file doc).
      * @param scene_dir              Base dir sprite paths resolve against (the scene file's directory).
      * @param max_acquires_per_frame Acquire budget -- throttles upload_image_2d's
-     *                               vkQueueWaitIdle from stacking multiple stalls in one frame.
+     *                               the underlying blocking wait from stacking multiple stalls in one frame.
      * @param release_delay_frames   Consecutive out-of-range frames required before releasing.
      * @param residency_margin       Extra world-space padding added to the camera's visible
      *                               rect before culling -- a prefetch margin so a sprite is

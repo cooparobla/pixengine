@@ -19,7 +19,7 @@
 #ifndef PIXENGINE_RENDER_SPRITE_DRAW_LIST_H
 #define PIXENGINE_RENDER_SPRITE_DRAW_LIST_H
 
-#include <volk/volk.h>
+#include <gfxcoopa/types/texture_view.h>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -39,7 +39,7 @@ namespace pix {
 struct SpriteBatch {
     uint32_t    first_index = 0;
     uint32_t    index_count = 0;
-    VkImageView texture_view = VK_NULL_HANDLE;
+    coopa::gfx::TextureView texture_view;
 };
 
 /**
@@ -60,7 +60,7 @@ struct SpriteBatch {
  *                       decal on the exact same texture/layer/depth).
  */
 inline uint64_t pack_sprite_sort_key(int32_t sort_layer, bool y_sort, float world_y,
-                                     uint32_t order_in_layer, VkImageView texture,
+                                     uint32_t order_in_layer, coopa::gfx::TextureView texture,
                                      uint8_t sub_order = 0) {
     constexpr float    kWorldExtent = 4096.0f;                      // +/- half-range the quantizer covers
     constexpr uint32_t kDepthBits   = 0xFFFFFFu;                    // 24 bits
@@ -79,7 +79,7 @@ inline uint64_t pack_sprite_sort_key(int32_t sort_layer, bool y_sort, float worl
         depth_bits = static_cast<uint64_t>(order_in_layer) & kDepthBits;
     }
 
-    uint64_t texture_bucket = static_cast<uint64_t>(std::hash<VkImageView>{}(texture)) & 0xFFFFu;
+    uint64_t texture_bucket = static_cast<uint64_t>(std::hash<coopa::gfx::TextureView>{}(texture)) & 0xFFFFu;
     uint64_t sub = sub_order;
 
     return (layer_bits << 48) | (depth_bits << 24) | (texture_bucket << 8) | sub;
@@ -105,7 +105,7 @@ public:
      *        corners and their matching UVs, in the order bottom-left,
      *        bottom-right, top-right, top-left.
      */
-    void add_quad(VkImageView tex, const glm::vec2 pos[4], const glm::vec2 uv[4], uint32_t color,
+    void add_quad(coopa::gfx::TextureView tex, const glm::vec2 pos[4], const glm::vec2 uv[4], uint32_t color,
                  int32_t sort_layer, bool y_sort, float world_y, uint32_t order_in_layer,
                  uint8_t sub_order = 0) {
         SpriteQuad q;
@@ -135,7 +135,7 @@ public:
      * @param color        Packed RGBA8 tint, see SpriteVertex::pack_color().
      * @param sort_layer, y_sort, world_y, order_in_layer, sub_order  See pack_sprite_sort_key().
      */
-    void add_sprite(VkImageView tex, const glm::vec2& world_pos, const glm::vec2& size_units,
+    void add_sprite(coopa::gfx::TextureView tex, const glm::vec2& world_pos, const glm::vec2& size_units,
                     const glm::vec2& pivot_norm, float rotation_deg, const glm::vec2& flip,
                     const coopa::ui::Rect& uv, uint32_t color,
                     int32_t sort_layer = 0, bool y_sort = false, float world_y = 0.0f,
@@ -225,7 +225,7 @@ private:
         glm::vec2   pos[4];
         glm::vec2   uv[4];
         uint32_t    color = 0;
-        VkImageView texture = VK_NULL_HANDLE;
+        coopa::gfx::TextureView texture;
         uint64_t    sort_key = 0;
     };
 

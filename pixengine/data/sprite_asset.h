@@ -85,7 +85,7 @@ public:
     SpriteAsset(coopa::gfx::engine::data::Texture atlas, DecodedPixAtlas data)
         : atlas_(std::move(atlas)), data_(std::move(data)) {}
 
-    VkImageView atlas_view() const { return atlas_.view(); }
+    coopa::gfx::TextureView atlas_view() const { return atlas_.view_typed(); }
     uint32_t atlas_width()  const { return atlas_.width(); }
     uint32_t atlas_height() const { return atlas_.height(); }
 
@@ -108,7 +108,7 @@ public:
     const std::vector<Hitbox>& hitboxes() const { return data_.hitboxes; }
     const std::unordered_map<std::string, glm::vec2>& anchors() const { return data_.anchors; }
 
-    // Move-only: destroying this frees the VkImage backing the atlas.
+    // Move-only: destroying this frees the GPU image backing the atlas.
     SpriteAsset(SpriteAsset&&) = default;
     SpriteAsset& operator=(SpriteAsset&&) = default;
     SpriteAsset(const SpriteAsset&) = delete;

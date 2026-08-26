@@ -18,16 +18,7 @@
 // Build:   cbuild --vulkan     (compiles shaders and cmake builds)
 // Run:     cplay               (runs ./build/pixengine_demo)
 
-// volk and VMA implementations are compiled once here, in the one
-// translation unit that actually links a Vulkan device.
-#include <volk/volk.h>
-
-#define VMA_STATIC_VULKAN_FUNCTIONS  0
-#define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
-#include <vma/vk_mem_alloc.h>
-
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -35,19 +26,12 @@
 #include <cstdlib>
 #include <memory>
 
-#include <gfxcoopa/core/instance.h>
-#include <gfxcoopa/core/surface.h>
-#include <gfxcoopa/core/device.h>
-#include <gfxcoopa/core/swapchain.h>
-#include <gfxcoopa/memory/allocator.h>
-#include <gfxcoopa/memory/buffer.h>
-#include <gfxcoopa/pipeline/render_pass.h>
+#include <gfxcoopa/app/context.h>
+#include <gfxcoopa/presentation/input_adapter.h>
+#include <gfxcoopa/input/input_map.h>
 #include <gfxcoopa/pipeline/pipeline.h>
 #include <gfxcoopa/pipeline/shader.h>
-#include <gfxcoopa/command/command_pool.h>
 #include <gfxcoopa/command/command_buffer.h>
-#include <gfxcoopa/presentation/window.h>
-#include <gfxcoopa/presentation/renderer.h>
 
 #include <coopa/asset/asset_manager.h>
 #include <coopa/scene/scene.h>
@@ -65,7 +49,6 @@
 #include <pixengine/data/tilemap_asset.h>
 #include <pixengine/loaders/pix_loader.h>
 #include <pixengine/loaders/tilemap_loader.h>
-#include <pixengine/input/input_map.h>
 #include <pixengine/scene/register.h>
 #include <pixengine/scene/residency.h>
 #include <pixengine/scene/scene_view.h>
@@ -109,34 +92,25 @@ int main() {
     std::string config_path = std::string(ROOT_DIR) + "/assets/config.yaml";
     coopa::pix::AppConfig config = coopa::pix::AppConfig::load(config_path);
 
-    coopa::gfx::presentation::Window window(config.window.title.c_str(), config.window.width,
-                                            config.window.height, config.window.resizable);
-
+    coopa::gfx::app::ContextConfig gfx_config = coopa::gfx::app::ContextConfig::from_env(
+        coopa::gfx::app::ContextConfig{
+            .title = config.window.title, .width = config.window.width, .height = config.window.height,
+            .resizable = config.window.resizable, .vsync = config.window.vsync,
+        });
 #ifdef NDEBUG
-    constexpr bool enable_validation = false;
-#else
-    constexpr bool enable_validation = true;
+    gfx_config.validation = false;
 #endif
-
-    coopa::gfx::core::Instance instance("pixengine", enable_validation);
-    coopa::gfx::core::Surface  surface(instance, window.handle());
-    coopa::gfx::core::Device   device(instance, surface);
-    coopa::gfx::memory::Allocator allocator(instance, device);
-
-    auto [fb_w, fb_h] = window.framebuffer_size();
-    coopa::gfx::core::Swapchain swapchain(device, surface, fb_w, fb_h, config.window.vsync);
-
-    coopa::gfx::command::CommandPool cmd_pool(device, device.graphics_family());
-
-    coopa::gfx::pipeline::RenderPass swap_pass(device, swapchain.image_format(), VK_FORMAT_UNDEFINED);
-    coopa::gfx::presentation::Renderer renderer(device, swapchain, swap_pass, cmd_pool);
+    // Context's swapchain render pass is always depth-less (see its constructor's
+    // comment); sprite_pass/ui_pass draw directly into it, matching demo.cpp's
+    // pre-existing depth-UNDEFINED render pass exactly.
+    coopa::gfx::app::Context ctx(gfx_config);
 
     std::string shader_dir = std::string(ROOT_DIR) + "/assets/shaders";
 
     // --- Sprite pass, drawing world-space sprites at native resolution
     // directly into the swapchain render pass -- the same one UiPass draws
     // into, sprites first.
-    coopa::pix::SpritePass sprite_pass(device, allocator, cmd_pool, swap_pass,
+    coopa::pix::SpritePass sprite_pass(ctx.device(), ctx.allocator(), ctx.command_pool(), ctx.render_pass(),
                                        shader_dir + "/sprite.vert.spv", shader_dir + "/sprite.frag.spv",
                                        config.renderer.max_textures);
 
@@ -144,16 +118,16 @@ int main() {
     // own already-compiled shaders (PROJ_DIR, sibling checkout) rather than
     // duplicating them into pixengine's own assets/shaders/.
     std::string uicoopa_shader_dir = std::string(PROJ_DIR) + "/uicoopa/assets/shaders";
-    coopa::ui::UiPass ui_pass(device, allocator, cmd_pool, swap_pass,
+    coopa::ui::UiPass ui_pass(ctx.device(), ctx.allocator(), ctx.command_pool(), ctx.render_pass(),
                               uicoopa_shader_dir + "/ui.vert.spv", uicoopa_shader_dir + "/ui.frag.spv");
 
     // --- Assets ---
     coopa::asset::AssetManager assets(config.assets.io_threads);
     assets.add_search_root(std::string(ROOT_DIR) + "/assets");
     assets.register_loader<coopa::pix::SpriteAsset>(
-        std::make_unique<coopa::pix::PixLoader>(device, allocator, cmd_pool));
+        std::make_unique<coopa::pix::PixLoader>(ctx.device(), ctx.allocator(), ctx.command_pool()));
     assets.register_loader<coopa::pix::TilemapAsset>(
-        std::make_unique<coopa::pix::TilemapLoader>(device, allocator, cmd_pool));
+        std::make_unique<coopa::pix::TilemapLoader>(ctx.device(), ctx.allocator(), ctx.command_pool()));
 
     // Phase 7: lean entirely on AssetManager's own eviction machinery once
     // SpriteResidencySystem drops a handle.
@@ -165,8 +139,8 @@ int main() {
     // (they share one process-wide SceneLoader registry keyed by distinct
     // "type:" names, so registration order between the two doesn't matter)
     // before either scene loads.
-    coopa::pix::register_pix_components(device, allocator, cmd_pool, assets);
-    coopa::ui::register_ui_components(device, allocator, cmd_pool);
+    coopa::pix::register_pix_components(ctx.device(), ctx.allocator(), ctx.command_pool(), assets);
+    coopa::ui::register_ui_components(ctx.device(), ctx.allocator(), ctx.command_pool());
 
     std::string scene_path = std::string(ROOT_DIR) + "/" + config.scene.default_scene;
     std::string scene_dir = std::filesystem::path(scene_path).parent_path().string();
@@ -202,8 +176,8 @@ int main() {
                                                 config.assets.release_delay_frames, config.assets.residency_margin);
     bool debug_placeholder = std::getenv("DEBUG_PLACEHOLDER") != nullptr;
 
-    coopa::pix::InputMap input_map;
-    input_map.bind_key("quit", GLFW_KEY_ESCAPE);
+    coopa::gfx::input::InputMap input_map;
+    input_map.bind("quit", coopa::gfx::input::Key::Escape);
 
     const float kPixelsPerUnit = config.canvas.pixels_per_unit;
     constexpr float kFixedDt = 1.0f / 60.0f;
@@ -228,49 +202,32 @@ int main() {
     // hitch, a compositor stall, anything) reads as the world visibly freezing
     // for a frame, since the sim would still advance by exactly one 1/60s tick
     // no matter how long that frame actually took. Clamped to 0.25s so a long
-    // stall (e.g. window drag) doesn't teleport the world on resume; the read
-    // env vars once, outside the loop -- getenv() every iteration was needless
-    // per-frame overhead.
-    const bool deterministic = std::getenv("MAX_FRAMES") != nullptr || std::getenv("ONESHOT") != nullptr;
-    auto last_tick = std::chrono::steady_clock::now();
+    // stall (e.g. window drag) doesn't teleport the world on resume.
+    const bool deterministic = gfx_config.headless_oneshot || gfx_config.max_frames != 0;
 
     std::cout << "[pixengine] Native-resolution rendering, " << kReferenceWidth << "x"
               << kReferenceHeight << " reference resolution best-fit scaled to the window. "
                  "Entering main loop. Press ESC to quit, resize to see it rescale.\n";
 
     int frame_count = 0;
-    while (!window.should_close()) {
-        window.poll_events();
+    while (!ctx.should_close()) {
+        ctx.poll(); // window.new_frame() + poll_events() + frame timer update.
 
-        float dt = kFixedDt;
-        if (!deterministic) {
-            auto now = std::chrono::steady_clock::now();
-            dt = std::chrono::duration<float>(now - last_tick).count();
-            last_tick = now;
-            dt = std::clamp(dt, 0.0f, 0.25f);
+        float dt = deterministic ? kFixedDt : std::clamp(ctx.delta_time(), 0.0f, 0.25f);
+
+        if (input_map.is_down("quit", coopa::gfx::presentation::key_state_of(ctx.window()))) {
+            ctx.window().set_should_close(true);
         }
 
-        if (input_map.is_action_down("quit", [&](int k) { return window.is_key_pressed(k); })) {
-            window.set_should_close(true);
-        }
-
-        if (window.was_resized()) {
-            auto [w, h] = window.framebuffer_size();
-            window.reset_resized();
-            if (w > 0 && h > 0) {
-                device.wait_idle();
-                swapchain.recreate(w, h);
-                renderer.recreate_framebuffers();
-            }
-        }
-
-        // Derived from swapchain.extent(), not window.framebuffer_size() --
-        // these can transiently disagree during a resize, and unlike before
-        // (only UiPass's scissor read framebuffer_size(), a harmless
-        // exposure), these numbers now also drive inv_half_extent and
-        // visible_world_rect(), where a mismatch would show as a one-frame
-        // aspect distortion rather than a harmless clip.
-        VkExtent2D extent = swapchain.extent();
+        // Context's resize handler already recreates the swapchain/framebuffers
+        // internally (see gfxcoopa/app/context.h) -- no manual was_resized()/
+        // recreate() dance needed here anymore.
+        //
+        // Derived from ctx.extent(), not window.framebuffer_size() -- these can
+        // transiently disagree during a resize, and these numbers also drive
+        // inv_half_extent and visible_world_rect(), where a mismatch would show
+        // as a one-frame aspect distortion rather than a harmless clip.
+        coopa::gfx::Extent2D extent = ctx.extent();
         uint32_t cur_w = extent.width, cur_h = extent.height;
         if (cur_w == 0 || cur_h == 0) {
             // Minimized: nothing to draw this iteration.
@@ -288,7 +245,7 @@ int main() {
         // own DrawList (see uicoopa/layout/canvas.h) -- set_viewport/input first.
         if (canvas) {
             canvas->set_viewport(cur_w, cur_h);
-            canvas->set_window_input(window);
+            canvas->set_window_input(ctx.window());
         }
         hud.update(dt);
         hud.late_update(dt);
@@ -365,31 +322,30 @@ int main() {
         camera_push.camera_pos[1] = camera_world_pos.y;
         camera_push.tint[0] = camera_push.tint[1] = camera_push.tint[2] = camera_push.tint[3] = 1.0f;
 
-        renderer.begin_frame(
-            [&](coopa::gfx::command::CommandBuffer& cmd) {
-                sprite_pass.draw(cmd, renderer.current_frame(), camera_push, draw_list,
-                                 fit_viewport, cur_w, cur_h);
-                if (canvas) {
-                    ui_pass.draw(cmd, renderer.current_frame(), cur_w, cur_h,
-                                canvas->scale_factor(), canvas->draw_list());
-                }
-            },
-            /* clear_color */ {{0.05f, 0.05f, 0.05f, 1.0f}});
+        coopa::gfx::app::FrameCallbacks cb;
+        cb.record = [&](coopa::gfx::command::CommandBuffer& cmd) {
+            sprite_pass.draw(cmd, ctx.current_frame(), camera_push, draw_list,
+                             fit_viewport, cur_w, cur_h);
+            if (canvas) {
+                ui_pass.draw(cmd, ctx.current_frame(), cur_w, cur_h,
+                            canvas->scale_factor(), canvas->draw_list());
+            }
+        };
+        cb.clear = coopa::gfx::ClearColor{0.05f, 0.05f, 0.05f, 1.0f};
+        ctx.frame(cb);
 
         ++frame_count; // unconditional -- the % 30 debug print above (and any
                        // future per-frame throttle) depends on this advancing
                        // every iteration, not just when MAX_FRAMES is set.
-        if (std::getenv("ONESHOT")) {
+        if (gfx_config.headless_oneshot) {
             break;
         }
-        if (const char* mf = std::getenv("MAX_FRAMES")) {
-            if (frame_count >= std::atoi(mf)) {
-                break;
-            }
+        if (ctx.max_frames() > 0 && static_cast<uint32_t>(frame_count) >= ctx.max_frames()) {
+            break;
         }
     }
 
-    device.wait_idle();
+    ctx.wait_idle();
 
     // register_pix_components()'s parser lambdas capture assets by reference
     // in SceneLoader's function-local static registry, which would otherwise

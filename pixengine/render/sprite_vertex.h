@@ -14,7 +14,7 @@
 #ifndef PIXENGINE_RENDER_SPRITE_VERTEX_H
 #define PIXENGINE_RENDER_SPRITE_VERTEX_H
 
-#include <volk/volk.h>
+#include <gfxcoopa/types/vertex_layout.h>
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -27,7 +27,7 @@ namespace pix {
 struct SpriteVertex {
     float    x, y;  ///< World-space position.
     float    u, v;  ///< Texture coordinates into the sprite atlas.
-    uint32_t color; ///< Packed RGBA8, VK_FORMAT_R8G8B8A8_UNORM (r in the low byte).
+    uint32_t color; ///< Packed RGBA8, Format::RGBA8_Unorm (r in the low byte).
 
     /// @brief Packs four [0,1] float color channels into SpriteVertex::color's layout.
     static uint32_t pack_color(float r, float g, float b, float a) {
@@ -37,20 +37,13 @@ struct SpriteVertex {
         return to_u8(r) | (to_u8(g) << 8) | (to_u8(b) << 16) | (to_u8(a) << 24);
     }
 
-    static VkVertexInputBindingDescription binding_description() {
-        VkVertexInputBindingDescription binding{};
-        binding.binding   = 0;
-        binding.stride    = sizeof(SpriteVertex);
-        binding.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-        return binding;
-    }
-
-    static std::vector<VkVertexInputAttributeDescription> attribute_descriptions() {
-        std::vector<VkVertexInputAttributeDescription> attrs(3);
-        attrs[0] = {0, 0, VK_FORMAT_R32G32_SFLOAT,  static_cast<uint32_t>(offsetof(SpriteVertex, x))};
-        attrs[1] = {1, 0, VK_FORMAT_R32G32_SFLOAT,  static_cast<uint32_t>(offsetof(SpriteVertex, u))};
-        attrs[2] = {2, 0, VK_FORMAT_R8G8B8A8_UNORM, static_cast<uint32_t>(offsetof(SpriteVertex, color))};
-        return attrs;
+    /// @brief This vertex format's binding+attribute layout, for the sealed Pipeline ctor.
+    static coopa::gfx::VertexLayout layout() {
+        return coopa::gfx::VertexLayout{}
+            .binding(0, sizeof(SpriteVertex))
+            .attribute(0, coopa::gfx::Format::RG32_Sfloat, static_cast<uint32_t>(offsetof(SpriteVertex, x)))
+            .attribute(1, coopa::gfx::Format::RG32_Sfloat, static_cast<uint32_t>(offsetof(SpriteVertex, u)))
+            .attribute(2, coopa::gfx::Format::RGBA8_Unorm, static_cast<uint32_t>(offsetof(SpriteVertex, color)));
     }
 };
 

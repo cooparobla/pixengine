@@ -1,7 +1,7 @@
 /**
  * @file sprite_pass.h
  * @brief Owns the sprite graphics pipeline, per-frame streaming geometry
- *        buffers, and the VkImageView -> descriptor-set cache for every
+ *        buffers, and the TextureView -> descriptor-set cache for every
  *        sprite atlas drawn.
  *
  * A near-clone of uicoopa/render/ui_pass.h with the differences a world-space,
@@ -21,14 +21,13 @@
  * resolution, unscaled.
  *
  * Same hard constraint as UiPass: DescriptorSet::bind_image() calls
- * vkUpdateDescriptorSets() immediately, which is unsafe once a render pass is
+ * updates descriptor sets immediately, which is unsafe once a render pass is
  * open. register_textures() MUST run before Renderer::begin_frame().
  */
 
 #ifndef PIXENGINE_RENDER_SPRITE_PASS_H
 #define PIXENGINE_RENDER_SPRITE_PASS_H
 
-#include <volk/volk.h>
 #include <algorithm>
 #include <array>
 #include <memory>
@@ -47,6 +46,10 @@
 #include <gfxcoopa/command/command_buffer.h>
 #include <gfxcoopa/engine/util/sampler.h>
 #include <gfxcoopa/engine/data/texture.h>
+#include <gfxcoopa/presentation/renderer.h>
+#include <gfxcoopa/types/enums.h>
+#include <gfxcoopa/types/sampler_desc.h>
+#include <gfxcoopa/types/texture_view.h>
 
 #include <pixengine/math/pixel_math.h>
 #include <pixengine/render/sprite_vertex.h>
@@ -69,7 +72,7 @@ struct SpritePush {
  */
 class SpritePass {
 public:
-    static constexpr uint32_t kFrames            = 2; ///< Must match presentation::Renderer::MAX_FRAMES_IN_FLIGHT.
+    static constexpr uint32_t kFrames            = coopa::gfx::presentation::MAX_FRAMES_IN_FLIGHT;
     static constexpr uint32_t kInitialMaxVerts   = 4096;
     static constexpr uint32_t kInitialMaxIndices = 6144;
 
@@ -92,44 +95,30 @@ public:
               uint32_t max_textures = 256)
         : device_(device), allocator_(&allocator)
     {
-        vert_shader_ = std::make_unique<coopa::gfx::pipeline::Shader>(device, vert_spv, VK_SHADER_STAGE_VERTEX_BIT);
-        frag_shader_ = std::make_unique<coopa::gfx::pipeline::Shader>(device, frag_spv, VK_SHADER_STAGE_FRAGMENT_BIT);
+        using namespace coopa::gfx;
 
-        VkDescriptorSetLayoutBinding binding{};
-        binding.binding         = 0;
-        binding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        binding.descriptorCount = 1;
-        binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+        vert_shader_ = std::make_unique<pipeline::Shader>(device, vert_spv, ShaderStage::Vertex);
+        frag_shader_ = std::make_unique<pipeline::Shader>(device, frag_spv, ShaderStage::Fragment);
 
-        desc_layout_ = std::make_unique<coopa::gfx::pipeline::DescriptorSetLayout>(
-            device, std::vector<VkDescriptorSetLayoutBinding>{binding});
+        desc_layout_ = std::make_unique<pipeline::DescriptorSetLayout>(
+            pipeline::DescriptorLayoutBuilder()
+                .combined_sampler(0, ShaderStage::Fragment)
+                .build(device));
 
-        desc_pool_ = std::make_unique<coopa::gfx::pipeline::DescriptorPool>(
-            device, max_textures,
-            std::vector<VkDescriptorPoolSize>{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, max_textures}});
+        desc_pool_ = std::make_unique<pipeline::DescriptorPool>(
+            pipeline::DescriptorPoolBuilder().add_sets(*desc_layout_, max_textures).build(device));
 
-        coopa::gfx::pipeline::PipelineConfig cfg{};
-        cfg.cull_mode   = VK_CULL_MODE_NONE;
-        cfg.depth_test  = false;
-        cfg.depth_write = false;
-        cfg.blend_mode  = coopa::gfx::pipeline::BlendMode::PremultipliedAlpha;
+        pipeline::PipelineDesc desc;
+        desc.shaders = {vert_shader_.get(), frag_shader_.get()};
+        desc.vertex  = SpriteVertex::layout();
+        desc.descriptor_layouts = {desc_layout_.get()};
+        desc.push_constants = { { ShaderStage::Vertex | ShaderStage::Fragment, 0, sizeof(SpritePush) } };
+        desc.raster.cull = CullMode::None;
+        desc.depth.test  = false;
+        desc.depth.write = false;
+        desc.blend.mode  = pipeline::BlendMode::PremultipliedAlpha;
 
-        VkPushConstantRange pc_range{};
-        pc_range.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-        pc_range.offset     = 0;
-        pc_range.size       = sizeof(SpritePush);
-
-        auto binding_desc = SpriteVertex::binding_description();
-        auto attr_descs   = SpriteVertex::attribute_descriptions();
-
-        pipeline_ = std::make_unique<coopa::gfx::pipeline::Pipeline>(
-            device, swapchain_pass,
-            std::vector<coopa::gfx::pipeline::Shader*>{vert_shader_.get(), frag_shader_.get()},
-            std::vector<VkVertexInputBindingDescription>{binding_desc},
-            attr_descs,
-            std::vector<VkDescriptorSetLayout>{desc_layout_->handle()},
-            cfg,
-            std::vector<VkPushConstantRange>{pc_range});
+        pipeline_ = std::make_unique<pipeline::Pipeline>(device, swapchain_pass, desc);
 
         sampler_ = std::make_unique<coopa::gfx::engine::util::Sampler>(
             coopa::gfx::engine::util::Sampler::nearest(device));
@@ -141,7 +130,7 @@ public:
         fallback_texture_ = std::make_unique<coopa::gfx::engine::data::Texture>(
             coopa::gfx::engine::data::Texture::upload(
                 device, allocator, cmd_pool, magenta_px.data(), 1, 1,
-                /*srgb=*/false, VK_FILTER_NEAREST, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE));
+                Format::RGBA8_Unorm, SamplerDesc::pixel_art()));
 
         for (uint32_t i = 0; i < kFrames; ++i) {
             vbo_[i] = std::make_unique<coopa::gfx::memory::Buffer>(
@@ -152,7 +141,7 @@ public:
             ibo_capacity_[i] = kInitialMaxIndices;
         }
 
-        register_view_(fallback_texture_->view());
+        register_view_(fallback_texture_->view_typed());
     }
 
     /**
@@ -187,7 +176,7 @@ public:
         // Clamp the scissor to the framebuffer -- viewport.x/y are already
         // >= 0 by compute_fit_viewport()'s construction, but the rect can
         // still extend past the far edge from float rounding at extreme
-        // aspect ratios; a VkRect2D offset can never be negative either way.
+        // aspect ratios; a scissor offset can never be negative either way.
         int32_t x0 = std::max(static_cast<int32_t>(viewport.x), 0);
         int32_t y0 = std::max(static_cast<int32_t>(viewport.y), 0);
         int32_t x1 = std::min(static_cast<int32_t>(viewport.x + viewport.w), static_cast<int32_t>(screen_w));
@@ -205,27 +194,26 @@ public:
         cmd.set_viewport(viewport.x, viewport.y, viewport.w, viewport.h);
         cmd.set_scissor(x0, y0, clipped_w, clipped_h);
         cmd.bind_vertex_buffer(*vbo_[frame_index]);
-        cmd.bind_index_buffer(*ibo_[frame_index], VK_INDEX_TYPE_UINT32);
-        cmd.push_constants(pipeline_->layout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-                           0, sizeof(push), &push);
+        cmd.bind_index_buffer(*ibo_[frame_index]);
+        cmd.push_constants(coopa::gfx::ShaderStage::Vertex | coopa::gfx::ShaderStage::Fragment, push);
 
         for (const SpriteBatch& batch : draw_list.batches()) {
             if (batch.index_count == 0) continue;
 
             auto it = descriptor_cache_.find(batch.texture_view);
             if (it == descriptor_cache_.end()) {
-                it = descriptor_cache_.find(fallback_texture_->view());
+                it = descriptor_cache_.find(fallback_texture_->view_typed());
             }
-            cmd.bind_descriptor_set(pipeline_->layout(), *it->second, 0);
+            cmd.bind_descriptor_set(*it->second);
             cmd.draw_indexed(batch.index_count, batch.first_index, 0, 1);
         }
     }
 
 private:
-    void register_view_(VkImageView view) {
+    void register_view_(coopa::gfx::TextureView view) {
         if (descriptor_cache_.count(view)) return;
         auto set = std::make_unique<coopa::gfx::pipeline::DescriptorSet>(device_, *desc_pool_, *desc_layout_);
-        set->bind_image(0, view, sampler_->handle());
+        set->bind_image(0, view, *sampler_);
         descriptor_cache_[view] = std::move(set);
     }
 
@@ -259,7 +247,7 @@ private:
     std::unique_ptr<coopa::gfx::engine::util::Sampler>         sampler_;
     std::unique_ptr<coopa::gfx::engine::data::Texture>         fallback_texture_;
 
-    std::unordered_map<VkImageView, std::unique_ptr<coopa::gfx::pipeline::DescriptorSet>> descriptor_cache_;
+    std::unordered_map<coopa::gfx::TextureView, std::unique_ptr<coopa::gfx::pipeline::DescriptorSet>> descriptor_cache_;
 
     std::unique_ptr<coopa::gfx::memory::Buffer> vbo_[kFrames];
     std::unique_ptr<coopa::gfx::memory::Buffer> ibo_[kFrames];

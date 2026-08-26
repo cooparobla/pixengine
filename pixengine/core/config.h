@@ -78,7 +78,7 @@ struct AssetsConfig {
     uint32_t max_idle_frames        = 60;   // ~1s at 60fps; lower than the suggested
                                              // production default (180, ~3s) so a demo
                                              // run doesn't need to stay open for minutes
-    uint32_t max_acquires_per_frame = 4;    // throttles upload_image_2d's vkQueueWaitIdle
+    uint32_t max_acquires_per_frame = 4;    // throttles the underlying upload's blocking wait
                                              // from stacking multiple stalls in one frame
     uint32_t release_delay_frames   = 30;   // hysteresis before dropping a handle that
                                              // just left the visible+margin rect

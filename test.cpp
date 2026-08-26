@@ -34,7 +34,7 @@
 #include <pixengine/data/tilemap_asset.h>
 #include <pixengine/data/tilemap_decoder.h>
 #include <pixengine/scene/residency.h>
-#include <pixengine/input/input_map.h>
+#include <gfxcoopa/input/input_map.h>
 
 // ANSI Colors for nice test output
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -182,7 +182,7 @@ static void test_fit_viewport_zero_dimension_inputs_are_safe() {
 static void test_color_pack_byte_order_matches_ui_vertex() {
     using namespace coopa::pix;
     // r in the low byte, matching coopa::ui::UiVertex::pack_color()'s layout
-    // (VK_FORMAT_R8G8B8A8_UNORM) so a packed atlas pixel needs no reordering.
+    // (Format::RGBA8_Unorm) so a packed atlas pixel needs no reordering.
     uint32_t c = pack_rgba8(0x11, 0x22, 0x33, 0x44);
     ASSERT_EQ(c, 0x44332211u);
     ASSERT_EQ(rgba8_r(c), 0x11);
@@ -842,7 +842,7 @@ static void test_camera2d_bounds_clamp() {
 
 static void test_sprite_sort_key_layer_dominates() {
     using namespace coopa::pix;
-    VkImageView tex = reinterpret_cast<VkImageView>(0x1000);
+    coopa::gfx::TextureView tex{0x1000};
     uint64_t k_low_layer = pack_sprite_sort_key(-100, false, 0.0f, 0, tex);
     uint64_t k_high_layer = pack_sprite_sort_key(100, false, 0.0f, 0, tex);
     ASSERT_TRUE(k_low_layer < k_high_layer);
@@ -855,7 +855,7 @@ static void test_sprite_sort_key_layer_dominates() {
 
 static void test_sprite_sort_key_y_sort_depth_ordering() {
     using namespace coopa::pix;
-    VkImageView tex = reinterpret_cast<VkImageView>(0x1000);
+    coopa::gfx::TextureView tex{0x1000};
     // Larger world_y sorts FIRST (drawn further back) -- standard top-down y-sort.
     uint64_t k_high_y = pack_sprite_sort_key(0, true, 10.0f, 0, tex);
     uint64_t k_low_y  = pack_sprite_sort_key(0, true, -10.0f, 0, tex);
@@ -864,8 +864,8 @@ static void test_sprite_sort_key_y_sort_depth_ordering() {
 
 static void test_sprite_sort_key_texture_confined_to_low_bits() {
     using namespace coopa::pix;
-    VkImageView tex_a = reinterpret_cast<VkImageView>(0x1000);
-    VkImageView tex_b = reinterpret_cast<VkImageView>(0x2000);
+    coopa::gfx::TextureView tex_a{0x1000};
+    coopa::gfx::TextureView tex_b{0x2000};
     uint64_t ka = pack_sprite_sort_key(0, false, 0.0f, 5, tex_a);
     uint64_t kb = pack_sprite_sort_key(0, false, 0.0f, 5, tex_b);
     // texture_bucket occupies bits [8,24) and sub_order bits [0,8) -- clear
@@ -877,8 +877,8 @@ static void test_sprite_sort_key_texture_confined_to_low_bits() {
 static void test_sprite_draw_list_batch_coalescing() {
     using namespace coopa::pix;
     SpriteDrawList list;
-    VkImageView tex_a = reinterpret_cast<VkImageView>(0x1000);
-    VkImageView tex_b = reinterpret_cast<VkImageView>(0x2000);
+    coopa::gfx::TextureView tex_a{0x1000};
+    coopa::gfx::TextureView tex_b{0x2000};
     coopa::ui::Rect uv{{0.0f, 0.0f}, {1.0f, 1.0f}};
 
     list.begin();
@@ -904,7 +904,7 @@ static void test_sprite_draw_list_quad_corners() {
 
     // No rotation, no flip, pivot at bottom-left (0,0).
     list.begin();
-    list.add_sprite(reinterpret_cast<VkImageView>(0x1), glm::vec2(10.0f, 20.0f), glm::vec2(4.0f, 2.0f),
+    list.add_sprite(coopa::gfx::TextureView{0x1}, glm::vec2(10.0f, 20.0f), glm::vec2(4.0f, 2.0f),
                     glm::vec2(0.0f, 0.0f), 0.0f, glm::vec2(1.0f, 1.0f), uv, 0xFFFFFFFFu);
     list.sort_and_flatten();
     ASSERT_EQ(list.vertices().size(), 4u);
@@ -915,7 +915,7 @@ static void test_sprite_draw_list_quad_corners() {
 
     // 180-degree rotation about a centered pivot mirrors every corner through it.
     list.begin();
-    list.add_sprite(reinterpret_cast<VkImageView>(0x1), glm::vec2(0.0f, 0.0f), glm::vec2(2.0f, 2.0f),
+    list.add_sprite(coopa::gfx::TextureView{0x1}, glm::vec2(0.0f, 0.0f), glm::vec2(2.0f, 2.0f),
                     glm::vec2(0.5f, 0.5f), 180.0f, glm::vec2(1.0f, 1.0f), uv, 0xFFFFFFFFu);
     list.sort_and_flatten();
     ASSERT_NEAR(list.vertices()[0].x, 1.0f, 1e-3f);
@@ -923,7 +923,7 @@ static void test_sprite_draw_list_quad_corners() {
 
     // Horizontal flip only, pivot at bottom-left: local x negates before translation.
     list.begin();
-    list.add_sprite(reinterpret_cast<VkImageView>(0x1), glm::vec2(0.0f, 0.0f), glm::vec2(4.0f, 2.0f),
+    list.add_sprite(coopa::gfx::TextureView{0x1}, glm::vec2(0.0f, 0.0f), glm::vec2(4.0f, 2.0f),
                     glm::vec2(0.0f, 0.0f), 0.0f, glm::vec2(-1.0f, 1.0f), uv, 0xFFFFFFFFu);
     list.sort_and_flatten();
     ASSERT_NEAR(list.vertices()[0].x, 0.0f, 1e-4f);
@@ -1063,35 +1063,38 @@ static void test_decide_residency_loading_items_never_reacquired() {
 // --- input_map.h ---------------------------------------------------------
 
 static void test_input_map_action_down_with_any_bound_key() {
-    using namespace coopa::pix;
+    using namespace coopa::gfx::input;
     InputMap map;
-    map.bind_key("jump", 32);  // e.g. GLFW_KEY_SPACE
-    map.bind_key("jump", 87);  // e.g. GLFW_KEY_W
+    map.bind("jump", Key::Space);
+    map.bind("jump", Key::W);
 
-    auto only_87_down = [](int k) { return k == 87; };
-    ASSERT_TRUE(map.is_action_down("jump", only_87_down));
+    // A magic keycode (e.g. a raw GLFW int) would have silently misbehaved
+    // here under the sealed dense Key enum -- this test exists specifically
+    // to keep that class of bug (see pixengine's migration notes) impossible.
+    auto only_w_down = [](Key k) { return k == Key::W; };
+    ASSERT_TRUE(map.is_down("jump", only_w_down));
 
-    auto nothing_down = [](int) { return false; };
-    ASSERT_TRUE(!map.is_action_down("jump", nothing_down));
+    auto nothing_down = [](Key) { return false; };
+    ASSERT_TRUE(!map.is_down("jump", nothing_down));
 }
 
 static void test_input_map_unbound_action_never_down() {
-    using namespace coopa::pix;
+    using namespace coopa::gfx::input;
     InputMap map;
-    auto always_true = [](int) { return true; };
-    ASSERT_TRUE(!map.is_action_down("nonexistent", always_true));
+    auto always_true = [](Key) { return true; };
+    ASSERT_TRUE(!map.is_down("nonexistent", always_true));
     ASSERT_TRUE(map.bindings("nonexistent").empty());
 }
 
 static void test_input_map_unbind_clears_bindings() {
-    using namespace coopa::pix;
+    using namespace coopa::gfx::input;
     InputMap map;
-    map.bind_key("fire", 1);
+    map.bind("fire", Key::F1);
     ASSERT_EQ(map.bindings("fire").size(), 1u);
     map.unbind("fire");
     ASSERT_TRUE(map.bindings("fire").empty());
-    auto always_true = [](int) { return true; };
-    ASSERT_TRUE(!map.is_action_down("fire", always_true));
+    auto always_true = [](Key) { return true; };
+    ASSERT_TRUE(!map.is_down("fire", always_true));
 }
 
 static void test_sprite_draw_list_uv_orientation_asymmetric() {
@@ -1101,7 +1104,7 @@ static void test_sprite_draw_list_uv_orientation_asymmetric() {
     // convention), max=(0.9,0.8) is the bottom.
     coopa::ui::Rect uv{{0.1f, 0.2f}, {0.9f, 0.8f}};
     list.begin();
-    list.add_sprite(reinterpret_cast<VkImageView>(0x1), glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 1.0f),
+    list.add_sprite(coopa::gfx::TextureView{0x1}, glm::vec2(0.0f, 0.0f), glm::vec2(1.0f, 1.0f),
                     glm::vec2(0.0f, 0.0f), 0.0f, glm::vec2(1.0f, 1.0f), uv, 0xFFFFFFFFu);
     list.sort_and_flatten();
 

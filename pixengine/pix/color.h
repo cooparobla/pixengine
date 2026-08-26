@@ -3,7 +3,7 @@
  * @brief Packed RGBA8 color helpers for the .pix decode/composite pipeline.
  *
  * Pure CPU, no Vulkan. The packed byte order (r in the low byte) intentionally
- * matches coopa::ui::UiVertex::pack_color() / VK_FORMAT_R8G8B8A8_UNORM, so a
+ * matches coopa::ui::UiVertex::pack_color() / Format::RGBA8_Unorm, so a
  * packed value here can be written straight into an atlas pixel buffer and
  * uploaded without any channel reordering.
  */

@@ -23,6 +23,8 @@
 #include <coopa/scene/component.h>
 #include <coopa/scene/scene_object.h>
 
+#include <gfxcoopa/types/texture_view.h>
+
 #include <pixengine/data/sprite_asset.h>
 #include <pixengine/render/sprite_draw_list.h>
 #include <pixengine/render/sprite_vertex.h>
@@ -65,7 +67,7 @@ public:
      *                     cull_size magenta placeholder instead of nothing --
      *                     lets Phase 7's residency streaming boundary be seen
      *                     directly rather than trusted on faith. Uses
-     *                     VK_NULL_HANDLE as the "texture", which SpritePass
+     *                     TextureView::null() as the "texture", which SpritePass
      *                     already renders as its own unregistered-texture
      *                     fallback (also magenta) -- no separate plumbing needed.
      *                     Default off: with a two-screen prefetch margin and an
@@ -90,7 +92,7 @@ public:
         if (!handle.is_loaded()) {
             if (debug_show_unloaded) {
                 coopa::ui::Rect full_uv{{0.0f, 0.0f}, {1.0f, 1.0f}};
-                list.add_sprite(VK_NULL_HANDLE, render_pos, cull_size, glm::vec2(0.5f, 0.5f),
+                list.add_sprite(coopa::gfx::TextureView::null(), render_pos, cull_size, glm::vec2(0.5f, 0.5f),
                                 tf->world_rotation, glm::vec2(1.0f, 1.0f), full_uv,
                                 SpriteVertex::pack_color(1.0f, 0.0f, 1.0f, 1.0f),
                                 sort_layer, y_sort, render_pos.y + y_sort_offset,

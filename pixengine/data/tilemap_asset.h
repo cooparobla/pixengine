@@ -79,7 +79,7 @@ public:
     TilemapAsset(coopa::gfx::engine::data::Texture tileset, DecodedTilemap data)
         : tileset_(std::move(tileset)), data_(std::move(data)) {}
 
-    VkImageView tileset_view() const { return tileset_.view(); }
+    coopa::gfx::TextureView tileset_view() const { return tileset_.view_typed(); }
 
     const std::vector<TileLayer>& layers() const { return data_.layers; }
     glm::vec2 tile_size_px() const { return data_.tile_size_px; }
