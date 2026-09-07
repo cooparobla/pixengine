@@ -27,8 +27,7 @@
 #include <memory>
 
 #include <gfxcoopa/app/context.h>
-#include <gfxcoopa/presentation/input_adapter.h>
-#include <gfxcoopa/input/input_map.h>
+#include <coopa/input/input_map.h>
 #include <gfxcoopa/pipeline/pipeline.h>
 #include <gfxcoopa/pipeline/shader.h>
 #include <gfxcoopa/command/command_buffer.h>
@@ -176,8 +175,8 @@ int main() {
                                                 config.assets.release_delay_frames, config.assets.residency_margin);
     bool debug_placeholder = std::getenv("DEBUG_PLACEHOLDER") != nullptr;
 
-    coopa::gfx::input::InputMap input_map;
-    input_map.bind("quit", coopa::gfx::input::Key::Escape);
+    coopa::input::InputMap input_map;
+    input_map.bind("quit", coopa::input::Key::Escape);
 
     const float kPixelsPerUnit = config.canvas.pixels_per_unit;
     constexpr float kFixedDt = 1.0f / 60.0f;
@@ -215,7 +214,7 @@ int main() {
 
         float dt = deterministic ? kFixedDt : std::clamp(ctx.delta_time(), 0.0f, 0.25f);
 
-        if (input_map.is_down("quit", coopa::gfx::presentation::key_state_of(ctx.window()))) {
+        if (input_map.is_down("quit", ctx.input())) {
             ctx.window().set_should_close(true);
         }
 
@@ -245,7 +244,7 @@ int main() {
         // own DrawList (see uicoopa/layout/canvas.h) -- set_viewport/input first.
         if (canvas) {
             canvas->set_viewport(cur_w, cur_h);
-            canvas->set_window_input(ctx.window());
+            canvas->set_input(ctx.input());
         }
         hud.update(dt);
         hud.late_update(dt);

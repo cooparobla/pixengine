@@ -34,7 +34,6 @@
 #include <pixengine/data/tilemap_asset.h>
 #include <pixengine/data/tilemap_decoder.h>
 #include <pixengine/scene/residency.h>
-#include <gfxcoopa/input/input_map.h>
 
 // ANSI Colors for nice test output
 #define ANSI_COLOR_RED     "\x1b[31m"
@@ -1060,42 +1059,10 @@ static void test_decide_residency_loading_items_never_reacquired() {
     ASSERT_TRUE(actions[0] == ResidencyAction::None);
 }
 
-// --- input_map.h ---------------------------------------------------------
-
-static void test_input_map_action_down_with_any_bound_key() {
-    using namespace coopa::gfx::input;
-    InputMap map;
-    map.bind("jump", Key::Space);
-    map.bind("jump", Key::W);
-
-    // A magic keycode (e.g. a raw GLFW int) would have silently misbehaved
-    // here under the sealed dense Key enum -- this test exists specifically
-    // to keep that class of bug (see pixengine's migration notes) impossible.
-    auto only_w_down = [](Key k) { return k == Key::W; };
-    ASSERT_TRUE(map.is_down("jump", only_w_down));
-
-    auto nothing_down = [](Key) { return false; };
-    ASSERT_TRUE(!map.is_down("jump", nothing_down));
-}
-
-static void test_input_map_unbound_action_never_down() {
-    using namespace coopa::gfx::input;
-    InputMap map;
-    auto always_true = [](Key) { return true; };
-    ASSERT_TRUE(!map.is_down("nonexistent", always_true));
-    ASSERT_TRUE(map.bindings("nonexistent").empty());
-}
-
-static void test_input_map_unbind_clears_bindings() {
-    using namespace coopa::gfx::input;
-    InputMap map;
-    map.bind("fire", Key::F1);
-    ASSERT_EQ(map.bindings("fire").size(), 1u);
-    map.unbind("fire");
-    ASSERT_TRUE(map.bindings("fire").empty());
-    auto always_true = [](Key) { return true; };
-    ASSERT_TRUE(!map.is_down("fire", always_true));
-}
+// input_map.h's own tests moved to libcoopa's top-level test.cpp
+// (input_test namespace) along with the rest of coopa::input -- they were
+// always window-free and tested a type pixengine no longer owns. See
+// coopa/input/README.md.
 
 static void test_sprite_draw_list_uv_orientation_asymmetric() {
     using namespace coopa::pix;
@@ -1308,10 +1275,6 @@ int main() {
     RUN_TEST(test_decide_residency_release_hysteresis);
     RUN_TEST(test_decide_residency_visible_never_releases_regardless_of_stale_counter);
     RUN_TEST(test_decide_residency_loading_items_never_reacquired);
-
-    RUN_TEST(test_input_map_action_down_with_any_bound_key);
-    RUN_TEST(test_input_map_unbound_action_never_down);
-    RUN_TEST(test_input_map_unbind_clears_bindings);
 
     std::cout << "===========================================" << std::endl;
     std::cout << "Tests run: " << g_tests_run << ", Failed: " << g_tests_failed << std::endl;
