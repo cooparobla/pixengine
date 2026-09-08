@@ -65,15 +65,26 @@ include_directories(${CMAKE_BINARY_DIR}/configuration)
 # live in gfxcoopa's single implementation TU) ---
 add_definitions(-DSTB_TRUETYPE_IMPLEMENTATION)
 
+# --- Shader compilation ---
+# See uicoopa/CMakeLists.txt's identical comment: cbuild --vulkan's checked-in-.spv path
+# passes no -I, which breaks the moment a pixengine shader #includes
+# <gfx/surface2d/...> from gfxcoopa's shared 2D quad backbone. gfx_add_shader_target()
+# always adds gfxcoopa's assets/shaders/ to the search path and tracks .glsl body
+# dependencies via depfiles.
+include(${GFXCOOPA_DIR}/cmake/GfxShaders.cmake)
+gfx_add_shader_target(pixengine_shaders SHADER_DIR "${CMAKE_SOURCE_DIR}/assets/shaders")
+
 # --- Add executables ---
 # `pixengine` is the headless suite ctest runs — test.cpp never opens a window,
 # so `ctest`/CI never needs a display. `pixengine_demo` is the windowed demo
 # that `cplay` runs (it matches this file's project() name).
 add_executable(pixengine test.cpp)
 target_link_libraries(pixengine PRIVATE coopa::gfx ${ZSTD_TARGET} OpenSSL::Crypto)
+add_dependencies(pixengine pixengine_shaders)
 
 add_executable(pixengine_demo demo.cpp)
 target_link_libraries(pixengine_demo PRIVATE coopa::gfx ${ZSTD_TARGET} OpenSSL::Crypto)
+add_dependencies(pixengine_demo pixengine_shaders)
 
 enable_testing()
 add_test(NAME pixengine_tests COMMAND pixengine)

@@ -118,7 +118,8 @@ int main() {
     // duplicating them into pixengine's own assets/shaders/.
     std::string uicoopa_shader_dir = std::string(PROJ_DIR) + "/uicoopa/assets/shaders";
     coopa::ui::UiPass ui_pass(ctx.device(), ctx.allocator(), ctx.command_pool(), ctx.render_pass(),
-                              uicoopa_shader_dir + "/ui.vert.spv", uicoopa_shader_dir + "/ui.frag.spv");
+                              uicoopa_shader_dir + "/ui.vert.spv", uicoopa_shader_dir + "/ui_quad.frag.spv",
+                              uicoopa_shader_dir + "/ui_text.frag.spv");
 
     // --- Assets ---
     coopa::asset::AssetManager assets(config.assets.io_threads);
@@ -314,11 +315,15 @@ int main() {
         // out to kPixelsPerUnit * zoom * fit_viewport.scale automatically,
         // without needing to fold fit_viewport.scale in here explicitly.
         glm::vec2 camera_world_pos = camera ? camera->world_position() : glm::vec2(0.0f);
+        // scale/offset, not inv_half_extent/camera_pos directly -- see gfx/surface2d/
+        // quad_vs.glsl's doc for the generic (pos*scale+offset) contract SpritePush now
+        // shares with UiPushConstants; offset folds camera_pos into the same reduction
+        // sprite.vert's old `(in_pos - camera_pos) * inv_half_extent` used to do in-shader.
         coopa::pix::SpritePush camera_push{};
-        camera_push.inv_half_extent[0] = 1.0f / (static_cast<float>(kReferenceWidth) / (2.0f * pixel_grid_scale));
-        camera_push.inv_half_extent[1] = 1.0f / (static_cast<float>(kReferenceHeight) / (2.0f * pixel_grid_scale));
-        camera_push.camera_pos[0] = camera_world_pos.x;
-        camera_push.camera_pos[1] = camera_world_pos.y;
+        camera_push.scale[0] = 1.0f / (static_cast<float>(kReferenceWidth) / (2.0f * pixel_grid_scale));
+        camera_push.scale[1] = 1.0f / (static_cast<float>(kReferenceHeight) / (2.0f * pixel_grid_scale));
+        camera_push.offset[0] = -camera_world_pos.x * camera_push.scale[0];
+        camera_push.offset[1] = -camera_world_pos.y * camera_push.scale[1];
         camera_push.tint[0] = camera_push.tint[1] = camera_push.tint[2] = camera_push.tint[3] = 1.0f;
 
         coopa::gfx::app::FrameCallbacks cb;

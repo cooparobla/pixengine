@@ -5,9 +5,11 @@ layout(location = 1) in vec4 in_color;
 
 layout(set = 0, binding = 0) uniform sampler2D atlas;
 
+// scale/camera_pos are read by sprite.vert (see that file's doc); unused here, but must
+// stay declared to match that stage's block byte-for-byte (shared VkPushConstantRange).
 layout(push_constant) uniform Push {
-    vec2 inv_half_extent;
-    vec2 camera_pos;
+    vec2 scale;
+    vec2 offset;
     vec4 tint;
 } pc;
 
